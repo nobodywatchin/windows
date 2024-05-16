@@ -80,7 +80,6 @@ jobs:
             your-docker-repo-name:latest
             ghcr.io/your-github-username/your-docker-repo-name:${{ github.sha }}
             ghcr.io/your-github-username/your-docker-repo-name:latest
-            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
