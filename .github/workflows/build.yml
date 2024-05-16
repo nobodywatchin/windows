@@ -78,8 +78,8 @@ jobs:
           tags: |
             nobodywatchin/windows:${{ github.sha }}
             nobodywatchin/windows:latest
-            ghcr.io/your-github-username/nobodywatchin/windows:${{ github.sha }}
-            ghcr.io/your-github-username/nobodywatchin/windows:latest
+            ghcr.io/nobodywatchin/windows:${{ github.sha }}
+            ghcr.io/nobodywatchin/windows:latest
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
