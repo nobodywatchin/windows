@@ -18,7 +18,14 @@ RUN set -eu && \
         dos2unix \
         cabextract \
         genisoimage \
-        libxml2-utils && \
+        libxml2-utils \
+        git \
+        build-essential \
+        ninja-build \
+        python-venv \
+        libglib2.0-0 \
+        flex \
+        bison && \
     apt-get clean && \
     echo "$VERSION_ARG" > /run/version && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
