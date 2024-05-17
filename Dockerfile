@@ -22,8 +22,8 @@ RUN set -eu && \
         git \
         build-essential \
         ninja-build \
-        python-venv \
-        libglib2.0-0 \
+        python3-venv \
+        libglib2.0-0t64 \
         flex \
         bison && \
     apt-get clean && \
