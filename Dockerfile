@@ -23,6 +23,10 @@ RUN set -eu && \
     echo "$VERSION_ARG" > /run/version && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+# Clone and set up the QEMU anti-detection script
+RUN git clone https://github.com/zhaodice/qemu-anti-detection.git /opt/qemu-anti-detection && \
+    chmod -R 755 /opt/qemu-anti-detection
+
 COPY --chmod=755 ./src /run/
 COPY --chmod=755 ./assets /run/assets
 
