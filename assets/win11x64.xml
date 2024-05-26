@@ -76,6 +76,13 @@
           <qemu:arg value="-machine"/>
           <qemu:arg value="q35,kernel_irqchip=on"/>
         </qemu:commandline>
+        <graphics type='spice'>
+          <listen type='none'/>
+          <gl enable='yes'/>
+        </graphics>
+        <video>
+          <model type='virtio'/>
+        </video>
       </domain>
     <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
       <DiskConfiguration>
