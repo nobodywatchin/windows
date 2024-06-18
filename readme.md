@@ -7,23 +7,25 @@
 [![Build]][build_url]
 [![Version]][tag_url]
 [![Size]][tag_url]
+[![Package]][pkg_url]
 [![Pulls]][hub_url]
 
 </div></h1>
 
-Windows in a Docker container.
+Windows inside a Docker container.
 
-## Features
+## Features ✨
 
+ - Multi-language
  - ISO downloader
  - KVM acceleration
  - Web-based viewer
 
-## Video
+## Video 📺
 
 [![Youtube](https://img.youtube.com/vi/xhGYobuG508/0.jpg)](https://www.youtube.com/watch?v=xhGYobuG508)
 
-## Usage
+## Usage 🐳
 
 Via Docker Compose:
 
@@ -48,7 +50,7 @@ services:
 Via Docker CLI:
 
 ```bash
-docker run -it --name windows -p 8006:8006 --device=/dev/kvm --cap-add NET_ADMIN --stop-timeout 120 dockurr/windows
+docker run -it --rm -p 8006:8006 --device=/dev/kvm --cap-add NET_ADMIN --stop-timeout 120 dockurr/windows
 ```
 
 Via Kubernetes:
@@ -57,9 +59,9 @@ Via Kubernetes:
 kubectl apply -f kubernetes.yml
 ```
 
-## FAQ
+## FAQ 💬
 
-* ### How do I use it?
+### How do I use it?
 
   Very simple! These are the steps:
   
@@ -71,7 +73,7 @@ kubectl apply -f kubernetes.yml
   
   Enjoy your brand new machine, and don't forget to star this repo!
 
-* ### How do I select the Windows version?
+### How do I select the Windows version?
 
   By default, Windows 11 will be installed. But you can add the `VERSION` environment variable to your compose file, in order to specify an alternative Windows version to be downloaded:
 
@@ -82,32 +84,58 @@ kubectl apply -f kubernetes.yml
 
   Select from the values below:
   
-  | **Value**  | **Version**  | **Size**  |
+  | **Value** | **Version**              | **Size** |
   |---|---|---|
-  | `win11`   | Windows 11 Pro | 6.4 GB    |
-  | `win11e`   | Windows 11 Enterprise | 5.8 GB    |
-  | `win10`   | Windows 10 Pro | 5.8 GB    |
-  | `ltsc10`  | Windows 10 LTSC       | 4.6 GB    |
-  | `win10e`   | Windows 10 Enterprise | 5.2 GB    |
-  | `win81`   | Windows 8.1 Pro | 4.2 GB    |
-  | `win81e`   | Windows 8.1 Enterprise | 3.8 GB    |
-  | `win7`    | Windows 7 Enterprise | 3.0 GB    |
-  | `vista`   | Windows Vista Enterprise | 3.0 GB    |
-  | `winxp`   | Windows XP Professional | 0.6 GB    |
+  | `win11`   | Windows 11 Pro           | 6.4 GB   |
+  | `win11e`  | Windows 11 Enterprise    | 5.8 GB   |
+  | `win10`   | Windows 10 Pro           | 5.7 GB   |
+  | `ltsc10`  | Windows 10 LTSC          | 4.6 GB   |
+  | `win10e`  | Windows 10 Enterprise    | 5.2 GB   |
+  ||||  
+  | `win8`    | Windows 8.1 Pro          | 4.0 GB   |
+  | `win8e`   | Windows 8.1 Enterprise   | 3.7 GB   |
+  | `win7`    | Windows 7 Enterprise     | 3.0 GB   |
+  | `vista`   | Windows Vista Enterprise | 3.0 GB   |
+  | `winxp`   | Windows XP Professional  | 0.6 GB   |
   ||||
-  | `2022`    | Windows Server 2022   | 4.7 GB    |
-  | `2019`    | Windows Server 2019   | 5.3 GB    |
-  | `2016`    | Windows Server 2016   | 6.5 GB    |
-  | `2012`    | Windows Server 2012   | 4.3 GB    |
-  | `2008`    | Windows Server 2008   | 3.0 GB    |
+  | `2022`    | Windows Server 2022      | 4.7 GB   |
+  | `2019`    | Windows Server 2019      | 5.3 GB   |
+  | `2016`    | Windows Server 2016      | 6.5 GB   |
+  | `2012`    | Windows Server 2012      | 4.3 GB   |
+  | `2008`    | Windows Server 2008      | 3.0 GB   |
   ||||
-  | `core11`  | Tiny 11 Core | 2.1 GB    |
-  | `tiny11`  | Tiny 11            | 3.8 GB    |
-  | `tiny10`  | Tiny 10            | 3.6 GB   |
+  | `core11`  | Tiny 11 Core             | 2.1 GB   |
+  | `tiny11`  | Tiny 11                  | 3.8 GB   |
+  | `tiny10`  | Tiny 10                  | 3.6 GB   |
 
-  To install ARM64 versions of Windows use [dockur/windows-arm](https://github.com/dockur/windows-arm/).
+> [!TIP]
+> To install ARM64 versions of Windows use [dockur/windows-arm](https://github.com/dockur/windows-arm/).
 
-* ### How do I change the storage location?
+### How do I select the Windows language?
+
+  By default, the English version of Windows will be downloaded. But you can add the `LANGUAGE` environment variable to your compose file, in order to specify an alternative language:
+
+  ```yaml
+  environment:
+    LANGUAGE: "French"
+  ```
+  
+  You can choose between: 🇦🇪 Arabic, 🇧🇬 Bulgarian, 🇨🇳 Chinese, 🇭🇷 Croatian, 🇨🇿 Czech, 🇩🇰 Danish, 🇳🇱 Dutch, 🇬🇧 English, 🇪🇪 Estionian, 🇫🇮 Finnish, 🇫🇷 French, 🇩🇪 German, 🇬🇷 Greek, 🇮🇱 Hebrew, 🇭🇺 Hungarian, 🇮🇹 Italian, 🇯🇵 Japanese, 🇰🇷 Korean, 🇱🇻 Latvian, 🇱🇹 Lithuanian, 🇳🇴 Norwegian, 🇵🇱 Polish, 🇵🇹 Portuguese, 🇷🇴 Romanian, 🇷🇺 Russian, 🇷🇸 Serbian, 🇸🇰 Slovak, 🇸🇮 Slovenian, 🇪🇸 Spanish, 🇸🇪 Swedish, 🇹🇭 Thai, 🇹🇷 Turkish and 🇺🇦 Ukrainian.
+
+### How do I select the keyboard layout?
+
+  If you want to use a keyboard layout or locale that is not the default for your selected language, you can add the `KEYBOARD` and `REGION` variables with a culture code, like this:
+
+  ```yaml
+  environment:
+    REGION: "en-US"
+    KEYBOARD: "en-US"
+  ```
+
+> [!NOTE]  
+>  Changing these values will have no effect after the installation has been performed already. Use the control panel inside Windows in that case.
+
+### How do I change the storage location?
 
   To change the storage location, include the following bind mount in your compose file:
 
@@ -118,7 +146,7 @@ kubectl apply -f kubernetes.yml
 
   Replace the example path `/var/win` with the desired storage folder.
 
-* ### How do I change the size of the disk?
+### How do I change the size of the disk?
 
   To expand the default size of 64 GB, add the `DISK_SIZE` setting to your compose file and set it to your preferred capacity:
 
@@ -127,9 +155,10 @@ kubectl apply -f kubernetes.yml
     DISK_SIZE: "256G"
   ```
   
-  This can also be used to resize the existing disk to a larger capacity without any data loss.
+> [!TIP]
+> This can also be used to resize the existing disk to a larger capacity without any data loss.
 
-* ### How do I share files with the host?
+### How do I share files with the host?
 
   Open 'File Explorer' and click on the 'Network' section, you will see a computer called `host.lan`. Double-click it and it will show a folder called `Data`, which can be binded to any folder on your host via the compose file:
 
@@ -138,9 +167,12 @@ kubectl apply -f kubernetes.yml
     -  /home/user/example:/shared
   ```
 
-  The example folder `/home/user/example` will be available as ` \\host.lan\Data`. You can optionally map this path to a drive letter in Windows, for easier access.
+  The example folder `/home/user/example` will be available as ` \\host.lan\Data`.
+  
+> [!TIP]
+> You can map this path to a drive letter in Windows, for easier access.
 
-* ### How do I install a custom image?
+### How do I install a custom image?
 
   In order to download an unsupported ISO image that is not selectable from the list above, specify the URL of that ISO in the `VERSION` environment variable, for example:
   
@@ -158,22 +190,9 @@ kubectl apply -f kubernetes.yml
 
   Replace the example path `/home/user/example.iso` with the filename of your desired ISO file, the value of `VERSION` will be ignored in this case.
 
-* ### How do I customize the installation?
+### How do I run a script after installation?
 
-  If you want to modify the settings used during the automatic installation, you can do this by editing the answer file corresponding to your Windows edition, for example [win11x64.xml](https://raw.githubusercontent.com/dockur/windows/master/assets/win11x64.xml) in the case of Windows 11 Pro.
-
-  Apply your modifications to it, and add this line to your compose file:
-
-  ```yaml
-  volumes:
-    -  /home/user/example.xml:/custom.xml
-  ```
-
-  Replace the example path `/home/user/example.xml` with the filename of the modified XML file.
-
-* ### How do I run a script after installation?
-
-  To run your own script after installation, you can create a file called `install.bat` and place it in a folder together with other files it needs (programs to install for example). Then bind it in your compose file like this:
+  To run your own script after installation, you can create a file called `install.bat` and place it in a folder together with any additional files it needs (software to be installed for example). Then bind that folder in your compose file like this:
 
   ```yaml
   volumes:
@@ -182,9 +201,9 @@ kubectl apply -f kubernetes.yml
 
   The example folder `/home/user/example` will be copied to `C:\OEM` during installation and the containing `install.bat` will be executed during the last step.
 
-* ### How do I perform a manual installation?
+### How do I perform a manual installation?
 
-  It's best to use the automatic installation, as it optimizes various settings to give you maximum performance and prevent common issues.
+  It's best to stick to the automatic installation, as it adjusts various settings to prevent common issues when running Windows inside a virtual environment.
 
   However, if you insist on performing the installation manually, add the following environment variable to your compose file:
 
@@ -193,48 +212,11 @@ kubectl apply -f kubernetes.yml
     MANUAL: "Y"
   ```
 
-  Then follow these steps:
+### How do I change the amount of CPU or RAM?
 
-  - Start the container and connect to [port 8006](http://localhost:8006) of the container in your web browser. After the download is finished, you will see the Windows installation screen.
+  By default, the container will be allowed to use a maximum of 2 CPU cores and 4 GB of RAM.
 
-  - Start the installation by clicking `Install now`. On the next screen, press 'OK' when prompted to `Load driver`.
-
-  -  Select the `VirtIO SCSI` driver from the list that matches your Windows version. So for Windows 11, select `D:\amd64\w11\vioscsi.inf` and click 'Next'.
-
-  - Accept the license agreement and select your preferred Windows edition, like Home or Pro.
-
-  - Choose `Custom: Install Windows only (advanced)`, and click `Load driver` on the next screen.
-
-  - Select 'Browse' and navigate to the `D:\NetKVM\w11\amd64` folder, and click 'OK'.
-
-  - Select the `VirtIO Ethernet Adapter` from the list and click 'Next'.
-
-  - Select `Drive 0` and click 'Next'.
-
-  - Wait until Windows finishes copying files and completes the installation.
-
-  - Once you see the desktop, open File Explorer and navigate to the CD-ROM drive (`E:\`).
-
-  - Double-click on `virtio-win-gt-x64.msi` and proceed to install the VirtIO drivers.
-
-  Enjoy your brand new machine, and don't forget to star this repo!
- 
-* ### How do I verify if my system supports KVM?
-
-  To verify if your system supports KVM, run the following commands:
-
-  ```bash
-  sudo apt install cpu-checker
-  sudo kvm-ok
-  ```
-
-  If you receive an error from `kvm-ok` indicating that KVM acceleration can't be used, check the virtualization settings in the BIOS.
-
-* ### How do I increase the amount of CPU or RAM?
-
-  By default, 2 CPU cores and 4 GB of RAM are allocated to the container, as those are the minimum requirements of Windows 11.
-
-  If there arises a need to increase this, add the following environment variables:
+  If you want to adjust this, you can specify the desired amount using the following environment variables:
 
   ```yaml
   environment:
@@ -242,15 +224,27 @@ kubectl apply -f kubernetes.yml
     CPU_CORES: "4"
   ```
 
-* ### How do I connect using RDP?
+### How do I configure the username and password?
+
+  By default, a user called `Docker` is created during the installation, with an empty password.
+
+  If you want to use different credentials, you can change them in your compose file:
+
+  ```yaml
+  environment:
+    USERNAME: "bill"
+    PASSWORD: "gates"
+  ```
+
+### How do I connect using RDP?
 
   The web-viewer is mainly meant to be used during installation, as its picture quality is low, and it has no audio or clipboard for example.
 
-  So for a better experience you can connect using any Microsoft Remote Desktop client to the IP of the container, using the username `docker` and by leaving the password empty.
+  So for a better experience you can connect using any Microsoft Remote Desktop client to the IP of the container, using the username `Docker` and by leaving the password empty.
 
-  There is a good RDP client for [Android](https://play.google.com/store/apps/details?id=com.microsoft.rdc.androidx) available from the Play Store and one for [iOS](https://apps.apple.com/nl/app/microsoft-remote-desktop/id714464092?l=en-GB) in the Apple Store. For Linux you can use [FreeRDP](https://www.freerdp.com/) and on Windows just type `mstsc` in the search box.
+  There is a RDP client for [Android](https://play.google.com/store/apps/details?id=com.microsoft.rdc.androidx) available from the Play Store and one for [iOS](https://apps.apple.com/nl/app/microsoft-remote-desktop/id714464092?l=en-GB) in the Apple Store. For Linux you can use [FreeRDP](https://www.freerdp.com/) and on Windows just type `mstsc` in the search box.
 
-* ### How do I assign an individual IP address to the container?
+### How do I assign an individual IP address to the container?
 
   By default, the container uses bridge networking, which shares the IP address with the host. 
 
@@ -284,11 +278,12 @@ kubectl apply -f kubernetes.yml
  
   An added benefit of this approach is that you won't have to perform any port mapping anymore, since all ports will be exposed by default.
 
-  Please note that this IP address won't be accessible from the Docker host due to the design of macvlan, which doesn't permit communication between the two. If this is a concern, you need to create a [second macvlan](https://blog.oddbit.com/post/2018-03-12-using-docker-macvlan-networks/#host-access) as a workaround.
+> [!IMPORTANT]  
+> This IP address won't be accessible from the Docker host due to the design of macvlan, which doesn't permit communication between the two. If this is a concern, you need to create a [second macvlan](https://blog.oddbit.com/post/2018-03-12-using-docker-macvlan-networks/#host-access) as a workaround.
 
-* ### How can Windows acquire an IP address from my router?
+### How can Windows acquire an IP address from my router?
 
-  After configuring the container for macvlan (see above), it is possible for Windows to become part of your home network by requesting an IP from your router, just like a real PC.
+  After configuring the container for [macvlan](#how-do-i-assign-an-individual-ip-address-to-the-container), it is possible for Windows to become part of your home network by requesting an IP from your router, just like a real PC.
 
   To enable this mode, add the following lines to your compose file:
 
@@ -301,9 +296,10 @@ kubectl apply -f kubernetes.yml
     - 'c *:* rwm'
   ```
 
-  Please note that in this mode, the container and Windows will each have their own separate IPs. The container will keep the macvlan IP, and Windows will use the DHCP IP.
+> [!NOTE]  
+> In this mode, the container and Windows will each have their own separate IPs.
 
-* ### How do I add multiple disks?
+### How do I add multiple disks?
 
   To create additional disks, modify your compose file like this:
   
@@ -316,7 +312,7 @@ kubectl apply -f kubernetes.yml
     - /mnt/data/example:/storage3
   ```
 
-* ### How do I pass-through a disk?
+### How do I pass-through a disk?
 
   It is possible to pass-through disk devices directly by adding them to your compose file in this way:
 
@@ -328,7 +324,7 @@ kubectl apply -f kubernetes.yml
 
   Use `/disk1` if you want it to become your main drive, and use `/disk2` and higher to add them as secondary drives.
 
-* ### How do I pass-through a USB device?
+### How do I pass-through a USB device?
 
   To pass-through a USB device, first lookup its vendor and product id via the `lsusb` command, then add them to your compose file like this:
 
@@ -339,22 +335,52 @@ kubectl apply -f kubernetes.yml
     - /dev/bus/usb
   ```
 
-* ### Is this project legal?
+> [!IMPORTANT]
+> If the device is a USB disk drive, please wait until after the installation is completed before connecting it. Otherwise the installation may fail, as the order of the disks can get rearranged.
 
-  Yes, this project contains only open-source code and does not distribute any copyrighted material. Any product keys found in the code are just generic placeholders provided by Microsoft for trial purposes. So under all applicable laws, this project would be considered legal.
+### How do I verify if my system supports KVM?
 
-## Stars
+  To verify that your system supports KVM, run the following commands:
+
+  ```bash
+  sudo apt install cpu-checker
+  sudo kvm-ok
+  ```
+
+  If you receive an error from `kvm-ok` indicating that KVM acceleration can't be used, please check whether:
+
+  - the virtualization extensions (`Intel VT-x` or `AMD SVM`) are enabled in your BIOS.
+
+  - you are running an operating system that supports them, like Linux or Windows 11 (macOS and Windows 10 do not unfortunately).
+
+  - you enabled "nested virtualization" if you are running the container inside a virtual machine.
+
+  - you are not using a cloud provider, as most of them do not allow nested virtualization for their VPS's.
+
+  If you didn't receive any error from `kvm-ok` at all, but the container still complains that `/dev/kvm` is missing, it might help to add `privileged: true` to your compose file (or `--privileged` to your `run` command), to rule out any permission issue.
+
+### How do I run macOS in a container?
+
+  You can use [dockur/macos](https://github.com/dockur/macos) for that. It shares many of the same features, except for the automatic installation.
+
+### Is this project legal?
+
+  Yes, this project contains only open-source code and does not distribute any copyrighted material. Any product keys found in the code are just generic placeholders provided by Microsoft for trial purposes. So under all applicable laws, this project will be considered legal.
+
+## Stars 🌟
 [![Stars](https://starchart.cc/dockur/windows.svg?variant=adaptive)](https://starchart.cc/dockur/windows)
 
-## Disclaimer
+## Disclaimer ⚖️
 
-The product names, logos, brands, and other trademarks referred to within this project are the property of their respective trademark holders. This project is not affiliated, sponsored, or endorsed by Microsoft Corporation.
+*The product names, logos, brands, and other trademarks referred to within this project are the property of their respective trademark holders. This project is not affiliated, sponsored, or endorsed by Microsoft Corporation.*
 
 [build_url]: https://github.com/dockur/windows/
 [hub_url]: https://hub.docker.com/r/dockurr/windows/
 [tag_url]: https://hub.docker.com/r/dockurr/windows/tags
+[pkg_url]: https://github.com/dockur/windows/pkgs/container/windows
 
 [Build]: https://github.com/dockur/windows/actions/workflows/build.yml/badge.svg
 [Size]: https://img.shields.io/docker/image-size/dockurr/windows/latest?color=066da5&label=size
 [Pulls]: https://img.shields.io/docker/pulls/dockurr/windows.svg?style=flat&label=pulls&logo=docker
 [Version]: https://img.shields.io/docker/v/dockurr/windows/latest?arch=amd64&sort=semver&color=066da5
+[Package]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fipitio%2Fghcr-pulls%2Fmaster%2Findex.json&query=%24%5B%3F(%40.owner%3D%3D%22dockur%22%20%26%26%20%40.repo%3D%3D%22windows%22%20%26%26%20%40.image%3D%3D%22windows%22)%5D.pulls&logo=github&style=flat&color=066da5&label=pulls

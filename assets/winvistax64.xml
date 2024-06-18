@@ -20,29 +20,17 @@
             <CreatePartition wcm:action="add">
               <Order>1</Order>
               <Type>Primary</Type>
-              <Size>100</Size>
-            </CreatePartition>
-            <CreatePartition wcm:action="add">
-              <Order>2</Order>
-              <Type>Primary</Type>
               <Extend>true</Extend>
             </CreatePartition>
           </CreatePartitions>
           <ModifyPartitions>
             <ModifyPartition wcm:action="add">
-              <Format>NTFS</Format>
-              <Label>System Reserved</Label>
-              <Order>1</Order>
-              <Active>true</Active>
-              <PartitionID>1</PartitionID>
-            </ModifyPartition>
-            <ModifyPartition wcm:action="add">
               <Active>true</Active>
               <Format>NTFS</Format>
               <Label>Windows</Label>
               <Letter>C</Letter>
-              <Order>2</Order>
-              <PartitionID>2</PartitionID>
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
             </ModifyPartition>
           </ModifyPartitions>
         </Disk>
@@ -57,7 +45,7 @@
           </InstallFrom>
           <InstallTo>
             <DiskID>0</DiskID>
-            <PartitionID>2</PartitionID>
+            <PartitionID>1</PartitionID>
           </InstallTo>
           <WillShowUI>OnError</WillShowUI>
           <InstallToAvailablePartition>false</InstallToAvailablePartition>
@@ -71,19 +59,6 @@
           <Key>4D2XH-PRBMM-8Q22B-K8BM3-MRW4W</Key>
         </ProductKey>
       </UserData>
-    </component>
-    <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-      <DriverPaths>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
-          <Path>D:\viostor\2k8\amd64</Path>
-        </PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="2">
-          <Path>D:\NetKVM\2k8\amd64</Path>
-        </PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="3">
-          <Path>D:\vioscsi\2k8\amd64</Path>
-        </PathAndCredentials>
-      </DriverPaths>
     </component>
   </settings>
   <settings pass="generalize">
@@ -119,6 +94,7 @@
   <settings pass="oobeSystem">
     <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
       <InputLocale>0409:00000409</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
     </component>
@@ -154,9 +130,14 @@
           <PlainText>true</PlainText>
         </Password>
       </AutoLogon>
+      <Display>
+        <ColorDepth>32</ColorDepth>
+        <HorizontalResolution>1920</HorizontalResolution>
+        <VerticalResolution>1080</VerticalResolution>
+      </Display>
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
-        <NetworkLocation>Other</NetworkLocation>
+        <NetworkLocation>Home</NetworkLocation>
         <ProtectYourPC>3</ProtectYourPC>
         <SkipUserOOBE>true</SkipUserOOBE>
         <SkipMachineOOBE>false</SkipMachineOOBE>
@@ -203,7 +184,7 @@
           <Order>8</Order>
           <CommandLine>reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\NewNetworks" /v NetworkList /t REG_MULTI_SZ /d "" /f</CommandLine>
           <Description>Disable Network Discovery popup</Description>
-        </SynchronousCommand>        
+        </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>9</Order>
           <CommandLine>reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v "HideFirstRunExperience" /t REG_DWORD /d 1 /f</CommandLine>
@@ -231,27 +212,27 @@
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>14</Order>
-          <CommandLine>netsh.exe advfirewall firewall set rule group="Remote Desktop" new enable=Yes</CommandLine>
+          <CommandLine>netsh.exe advfirewall firewall set rule group="@FirewallAPI.dll,-28752" new enable=Yes</CommandLine>
           <Description>Add RDP in firewall</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>15</Order>
-          <CommandLine>netsh.exe Advfirewall set allprofiles state off</CommandLine>
-          <Description>Disable firewall</Description>
-        </SynchronousCommand>
-        <SynchronousCommand wcm:action="add">
-          <Order>16</Order>
           <CommandLine>reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f</CommandLine>
           <Description>Enable RDP</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>17</Order>
+          <Order>16</Order>
           <CommandLine>reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Windows\Sidebar" /v "TurnOffSidebar" /t REG_DWORD /d 1 /f</CommandLine>
           <Description>Turn off sidebar</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
+          <Order>17</Order>
+          <CommandLine>reg.exe add "HKCU\Control Panel\Desktop" /v "ScreenSaveActive" /t REG_SZ /d 0 /f</CommandLine>
+          <Description>Disable screensaver</Description>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
           <Order>18</Order>
-          <CommandLine>reg.exe add "HKCU\Control Panel\Desktop" /v "ScreenSaveActive" /t REG_DWORD /d 0 /f</CommandLine>
+          <CommandLine>reg.exe add "HKCU\Control Panel\Desktop" /v SCRNSAVE.EXE /t REG_SZ /d C:\Windows\System32\scrnsavex.scr /f</CommandLine>
           <Description>Disable screensaver</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
@@ -261,6 +242,16 @@
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>20</Order>
+          <CommandLine>netsh advfirewall firewall set rule group="@FirewallAPI.dll,-32752" new enable=Yes</CommandLine>
+          <Description>Enable Network Discovery</Description>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>21</Order>
+          <CommandLine>netsh advfirewall firewall set rule group="@FirewallAPI.dll,-28502" new enable=Yes</CommandLine>
+          <Description>Enable File Sharing</Description>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>22</Order>
           <CommandLine>cmd /C if exist "C:\OEM\install.bat" start "Install" "cmd /C C:\OEM\install.bat"</CommandLine>
           <Description>Execute custom script from the OEM folder if exists</Description>
         </SynchronousCommand>

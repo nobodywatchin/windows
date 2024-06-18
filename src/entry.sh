@@ -10,6 +10,7 @@ cd /run
 
 . reset.sh      # Initialize system
 . define.sh     # Define versions
+. mido.sh       # Download code
 . install.sh    # Run installation
 . disk.sh       # Initialize disks
 . display.sh    # Initialize graphics
@@ -22,8 +23,8 @@ cd /run
 
 trap - ERR
 
-info "Booting ${APP}${BOOT_DESC}..."
-[[ "$DEBUG" == [Yy1]* ]] && echo "Arguments: $ARGS" && echo
+version=$(qemu-system-x86_64 --version | head -n 1 | cut -d '(' -f 1 | awk '{ print $NF }')
+info "Booting ${APP}${BOOT_DESC} using QEMU v$version..."
 
 { qemu-system-x86_64 ${ARGS:+ $ARGS} >"$QEMU_OUT" 2>"$QEMU_LOG"; rc=$?; } || :
 (( rc != 0 )) && error "$(<"$QEMU_LOG")" && exit 15
@@ -35,4 +36,4 @@ cat "$QEMU_TERM" 2> /dev/null | tee "$QEMU_PTY" &
 wait $! || :
 
 sleep 1 & wait $!
-finish 0
+[ ! -f "$QEMU_END" ] && finish 0

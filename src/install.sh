@@ -7,17 +7,6 @@ FB="falling back to manual installation!"
 ETFS="boot/etfsboot.com"
 EFISYS="efi/microsoft/boot/efisys_noprompt.bin"
 
-hasDisk() {
-
-  [ -b "/disk1" ] && return 0
-  [ -b "/dev/disk1" ] && return 0
-  [ -b "${DEVICE:-}" ] && return 0
-  [ -s "$STORAGE/data.img" ]  && return 0
-  [ -s "$STORAGE/data.qcow2" ] && return 0
-
-  return 1
-}
-
 skipInstall() {
 
   local iso="$1"
@@ -65,13 +54,23 @@ startInstall() {
 
   if [ -z "$CUSTOM" ]; then
 
-    local file="${VERSION/\//}.iso"
+    local file="${VERSION//\//}.iso"
 
     if [[ "${VERSION,,}" == "http"* ]]; then
 
       file=$(basename "${VERSION%%\?*}")
       : "${file//+/ }"; printf -v file '%b' "${_//%/\\x}"
       file=$(echo "$file" | sed -e 's/[^A-Za-z0-9._-]/_/g')
+
+    else
+
+      local language
+      language=$(getLanguage "$LANGUAGE" "culture")
+      language="${language%%-*}"
+
+      if [ -n "$language" ] && [[ "${language,,}" != "en" ]]; then
+        file="${VERSION//\//}_${language,,}.iso"
+      fi
 
     fi
 
@@ -120,9 +119,11 @@ finishInstall() {
   fi
 
   rm -f "$STORAGE/windows.old"
+  rm -f "$STORAGE/windows.vga"
   rm -f "$STORAGE/windows.base"
   rm -f "$STORAGE/windows.boot"
   rm -f "$STORAGE/windows.mode"
+  rm -f "$STORAGE/windows.type"
 
   cp -f /run/version "$STORAGE/windows.ver"
 
@@ -147,7 +148,20 @@ finishInstall() {
           echo "$BOOT_MODE" > "$STORAGE/windows.mode"
         fi
       fi
+      # Enable secure boot on multi-socket systems to workaround freeze
+      if [ -n "$SOCKETS" ] && [[ "$SOCKETS" != "1" ]]; then
+        BOOT_MODE="windows_secure"
+        echo "$BOOT_MODE" > "$STORAGE/windows.mode"
+      fi
     fi
+  fi
+
+  if [ -n "${VGA:-}" ] && [[ "${VGA:-}" != "virtio" ]] && [[ "${VGA:-}" != "ramfb" ]]; then
+    echo "$VGA" > "$STORAGE/windows.vga"
+  fi
+
+  if [ -n "${DISK_TYPE:-}" ] && [[ "${DISK_TYPE:-}" != "scsi" ]]; then
+    echo "$DISK_TYPE" > "$STORAGE/windows.type"
   fi
 
   rm -rf "$TMP"
@@ -156,9 +170,17 @@ finishInstall() {
 
 abortInstall() {
 
-  local iso="$1"
+  local dir="$1"
+  local iso="$2"
+  local efi
 
   [[ "${iso,,}" == *".esd" ]] && exit 60
+
+  efi=$(find "$dir" -maxdepth 1 -type d -iname efi | head -n 1)
+
+  if [ -z "$efi" ]; then
+    [[ "${PLATFORM,,}" == "x64" ]] && BOOT_MODE="windows_legacy"
+  fi
 
   if [ -n "$CUSTOM" ]; then
     BOOT="$iso"
@@ -177,301 +199,28 @@ abortInstall() {
 
 detectCustom() {
 
-  local file=""
-  local size base
-
+  local file base
   CUSTOM=""
 
-  if [[ "${VERSION,,}" != "http"* ]]; then
-    base="${VERSION/\/storage\//}"
-    [[ "$base" == "."* ]] && base="${file:1}"
-    [[ "$base" == *"/"* ]] && base=""
-    [ -n "$base" ] && file=$(find "$STORAGE" -maxdepth 1 -type f -iname "$base" | head -n 1)
+  file=$(find / -maxdepth 1 -type f -iname custom.iso | head -n 1)
+  [ ! -s "$file" ] && file=$(find "$STORAGE" -maxdepth 1 -type f -iname custom.iso | head -n 1)
+
+  if [ ! -s "$file" ] && [[ "${VERSION,,}" != "http"* ]]; then
+    base=$(basename "$VERSION")
+    file="$STORAGE/$base"
   fi
-
-  [ -z "$file" ] && file=$(find "$STORAGE" -maxdepth 1 -type f -iname custom.iso | head -n 1)
-  [ -z "$file" ] && file=$(find "$STORAGE" -maxdepth 1 -type f -iname custom.img | head -n 1)
-
-  base="/custom.iso"
-  [ -f "$base" ] && [ -s "$base" ] && file="$base"
 
   if [ ! -f "$file" ] || [ ! -s "$file" ]; then
     return 0
   fi
 
+  local size
   size="$(stat -c%s "$file")"
   [ -z "$size" ] || [[ "$size" == "0" ]] && return 0
 
   ISO="$file"
   CUSTOM="$ISO"
   BOOT="$STORAGE/windows.$size.iso"
-
-  return 0
-}
-
-getESD() {
-
-  local dir="$1"
-  local version="$2"
-  local editionName
-  local winCatalog size
-
-  if ! isESD "${version,,}"; then
-    error "Invalid VERSION specified, value \"$version\" is not recognized!" && return 1
-  fi
-
-  winCatalog=$(getCatalog "$version" "url")
-  editionName=$(getCatalog "$version" "edition")
-
-  local msg="Downloading product information from Microsoft..."
-  info "$msg" && html "$msg"
-
-  rm -rf "$dir"
-  mkdir -p "$dir"
-
-  local wFile="catalog.cab"
-  local xFile="products.xml"
-  local eFile="esd_edition.xml"
-  local fFile="products_filter.xml"
-
-  { wget "$winCatalog" -O "$dir/$wFile" -q --timeout=10; rc=$?; } || :
-  (( rc != 0 )) && error "Failed to download $winCatalog , reason: $rc" && return 1
-
-  cd "$dir"
-
-  if ! cabextract "$wFile" > /dev/null; then
-    cd /run
-    error "Failed to extract $wFile!" && return 1
-  fi
-
-  cd /run
-
-  if [ ! -s "$dir/$xFile" ]; then
-    error "Failed to find $xFile in $wFile!" && return 1
-  fi
-
-  local esdLang="en-us"
-  local edQuery='//File[Architecture="'${PLATFORM}'"][Edition="'${editionName}'"]'
-
-  echo -e '<Catalog>' > "$dir/$fFile"
-  xmllint --nonet --xpath "${edQuery}" "$dir/$xFile" >> "$dir/$fFile" 2>/dev/null
-  echo -e '</Catalog>'>> "$dir/$fFile"
-  xmllint --nonet --xpath '//File[LanguageCode="'${esdLang}'"]' "$dir/$fFile" >"$dir/$eFile"
-
-  size=$(stat -c%s "$dir/$eFile")
-  if ((size<20)); then
-    error "Failed to find Windows product in $eFile!" && return 1
-  fi
-
-  local tag="FilePath"
-  ESD=$(xmllint --nonet --xpath "//$tag" "$dir/$eFile" | sed -E -e "s/<[\/]?$tag>//g")
-
-  if [ -z "$ESD" ]; then
-    error "Failed to find ESD URL in $eFile!" && return 1
-  fi
-
-  tag="Sha1"
-  ESD_SUM=$(xmllint --nonet --xpath "//$tag" "$dir/$eFile" | sed -E -e "s/<[\/]?$tag>//g")
-  tag="Size"
-  ESD_SIZE=$(xmllint --nonet --xpath "//$tag" "$dir/$eFile" | sed -E -e "s/<[\/]?$tag>//g")
-
-  rm -rf "$dir"
-  return 0
-}
-
-verifyFile() {
-
-  local iso="$1"
-  local size="$2"
-  local total="$3"
-  local check="$4"
-
-  if [ -n "$size" ] && [[ "$total" != "$size" ]] && [[ "$size" != "0" ]]; then
-    warn "The downloaded file has an unexpected size: $total bytes, while expected value was: $size bytes. Please report this at $SUPPORT/issues"
-  fi
-
-  local hash=""
-  local algo="SHA256"
-
-  [ -z "$check" ] && return 0
-  [[ "$VERIFY" != [Yy1]* ]] && return 0
-  [[ "${#check}" == "40" ]] && algo="SHA1"
-
-  local msg="Verifying downloaded ISO..."
-  info "$msg" && html "$msg"
-
-  if [[ "${algo,,}" != "sha256" ]]; then
-    hash=$(sha1sum "$iso" | cut -f1 -d' ')
-  else
-    hash=$(sha256sum "$iso" | cut -f1 -d' ')
-  fi
-
-  if [[ "$hash" == "$check" ]]; then
-    info "Succesfully verified ISO!" && return 0
-  fi
-
-  error "The downloaded file has an invalid $algo checksum: $hash , while expected value was: $check. Please report this at $SUPPORT/issues"
-
-  rm -f "$iso"
-  return 1
-}
-
-doMido() {
-
-  local iso="$1"
-  local version="$2"
-  local desc="$3"
-  local rc sum size total
-
-  rm -f "$iso"
-  rm -f "$iso.PART"
-
-  size=$(getMido "$version" "size")
-  sum=$(getMido "$version" "sum")
-
-  local msg="Downloading $desc..."
-  info "$msg" && html "$msg"
-  /run/progress.sh "$iso.PART" "$size" "Downloading $desc ([P])..." &
-
-  cd "$TMP"
-  { /run/mido.sh "${version,,}"; rc=$?; } || :
-  cd /run
-
-  fKill "progress.sh"
-
-  if (( rc == 0 )) && [ -f "$iso" ]; then
-    total=$(stat -c%s "$iso")
-    if [ "$total" -gt 100000000 ]; then
-      ! verifyFile "$iso" "$size" "$total" "$sum" && return 1
-      html "Download finished successfully..." && return 0
-    fi
-  fi
-
-  rm -f "$iso"
-  rm -f "$iso.PART"
-
-  return 1
-}
-
-downloadFile() {
-
-  local iso="$1"
-  local url="$2"
-  local sum="$3"
-  local size="$4"
-  local desc="$5"
-  local rc total progress domain dots
-
-  rm -f "$iso"
-
-  # Check if running with interactive TTY or redirected to docker log
-  if [ -t 1 ]; then
-    progress="--progress=bar:noscroll"
-  else
-    progress="--progress=dot:giga"
-  fi
-
-  local msg="Downloading $desc..."
-  html "$msg"
-
-  domain=$(echo "$url" | awk -F/ '{print $3}')
-  dots=$(echo "$domain" | tr -cd '.' | wc -c)
-  (( dots > 1 )) && domain=$(expr "$domain" : '.*\.\(.*\..*\)')
-
-  if [ -n "$domain" ] && [[ "${domain,,}" != *"microsoft.com" ]]; then
-    msg="Downloading $desc from $domain..."
-  fi
-
-  info "$msg"
-  /run/progress.sh "$iso" "$size" "Downloading $desc ([P])..." &
-
-  { wget "$url" -O "$iso" -q --timeout=10 --show-progress "$progress"; rc=$?; } || :
-
-  fKill "progress.sh"
-
-  if (( rc == 0 )) && [ -f "$iso" ]; then
-    total=$(stat -c%s "$iso")
-    if [ "$total" -gt 100000000 ]; then
-      ! verifyFile "$iso" "$size" "$total" "$sum" && return 1
-      html "Download finished successfully..." && return 0
-    fi
-  fi
-
-  error "Failed to download $url , reason: $rc"
-
-  rm -f "$iso"
-  return 1
-}
-
-downloadImage() {
-
-  local iso="$1"
-  local version="$2"
-  local tried="n"
-  local url sum size base desc
-
-  if [[ "${version,,}" == "http"* ]]; then
-    base=$(basename "$iso")
-    desc=$(fromFile "$base")
-    downloadFile "$iso" "$version" "" "" "$desc" && return 0
-    return 1
-  fi
-
-  if ! validVersion "$version"; then
-    error "Invalid VERSION specified, value \"$version\" is not recognized!" && return 1
-  fi
-
-  desc=$(printVersion "$version" "")
-
-  if isMido "$version"; then
-    tried="y"
-    doMido "$iso" "$version" "$desc" && return 0
-  fi
-
-  switchEdition "$version"
-
-  if isESD "$version"; then
-
-    if [[ "$tried" != "n" ]]; then
-      info "Failed to download $desc using Mido, will try a diferent method now..."
-    fi
-
-    tried="y"
-
-    if getESD "$TMP/esd" "$version"; then
-      ISO="${ISO%.*}.esd"
-      downloadFile "$ISO" "$ESD" "$ESD_SUM" "$ESD_SIZE" "$desc" && return 0
-      ISO="$iso"
-    fi
-
-  fi
-
-  for ((i=1;i<=MIRRORS;i++)); do
-
-    url=$(getLink "$i" "$version")
-
-    if [ -n "$url" ]; then
-      if [[ "$tried" != "n" ]]; then
-        info "Failed to download $desc, will try another mirror now..."
-      fi
-      tried="y"
-      size=$(getSize "$i" "$version")
-      sum=$(getHash "$i" "$version")
-      downloadFile "$iso" "$url" "$sum" "$size" "$desc" && return 0
-    fi
-
-  done
-
-  return 1
-}
-
-removeDownload() {
-
-  local iso="$1"
-
-  [ ! -f "$iso" ] && return 0
-  [ -n "$CUSTOM" ] && return 0
-  ! rm -f "$iso" 2> /dev/null && warn "failed to remove $iso !"
 
   return 0
 }
@@ -609,19 +358,6 @@ extractImage() {
   return 0
 }
 
-setXML() {
-
-  local file="/custom.xml"
-  [ ! -f "$file" ] || [ ! -s "$file" ] && file="$STORAGE/custom.xml"
-  [ ! -f "$file" ] || [ ! -s "$file" ] && file="/run/assets/custom.xml"
-  [ ! -f "$file" ] || [ ! -s "$file" ] && file="$1"
-  [ ! -f "$file" ] || [ ! -s "$file" ] && file="/run/assets/$DETECTED.xml"
-  [ ! -f "$file" ] || [ ! -s "$file" ] && return 1
-
-  XML="$file"
-  return 0
-}
-
 getPlatform() {
 
   local xml="$1"
@@ -639,6 +375,26 @@ getPlatform() {
 
   echo "$platform"
   return 0
+}
+
+checkPlatform() {
+
+  local xml="$1"
+  local platform compat
+
+  platform=$(getPlatform "$xml")
+
+  case "${platform,,}" in
+    "x86" ) compat="x64" ;;
+    "x64" ) compat="$platform" ;;
+    "arm64" ) compat="$platform" ;;
+    * ) compat="${PLATFORM,,}" ;;
+  esac
+
+  [[ "${compat,,}" == "${PLATFORM,,}" ]] && return 0
+
+  error "You cannot boot ${platform^^} images on a $PLATFORM CPU!"
+  return 1
 }
 
 hasVersion() {
@@ -686,26 +442,6 @@ selectVersion() {
   return 0
 }
 
-checkPlatform() {
-
-  local xml="$1"
-  local platform compat
-
-  platform=$(getPlatform "$xml")
-
-  case "${platform,,}" in
-    "x86" ) compat="x64" ;;
-    "x64" ) compat="$platform" ;;
-    "arm64" ) compat="$platform" ;;
-    * ) compat="${PLATFORM,,}" ;;
-  esac
-
-  [[ "${compat,,}" == "${PLATFORM,,}" ]] && return 0
-
-  error "You cannot boot ${platform^^} images on a $PLATFORM CPU!"
-  return 1
-}
-
 detectVersion() {
 
   local xml="$1"
@@ -720,11 +456,52 @@ detectVersion() {
   return 0
 }
 
+detectLanguage() {
+
+  local xml="$1"
+  local lang=""
+
+  if [[ "$xml" == *"LANGUAGE><DEFAULT>"* ]]; then
+    lang="${xml#*LANGUAGE><DEFAULT>}"
+    lang="${lang%%<*}"
+  else
+    if [[ "$xml" == *"FALLBACK><DEFAULT>"* ]]; then
+      lang="${xml#*FALLBACK><DEFAULT>}"
+      lang="${lang%%<*}"
+    fi
+  fi
+
+  if [ -z "$lang" ]; then
+   warn "Language could not be detected from ISO!" && return 0
+  fi
+
+  local culture
+  culture=$(getLanguage "$lang" "culture")
+  [ -n "$culture" ] && LANGUAGE="$lang" && return 0
+
+  warn "Invalid language detected: \"$lang\""
+  return 0
+}
+
+setXML() {
+
+  local file="/custom.xml"
+
+  [ ! -f "$file" ] || [ ! -s "$file" ] && file="$STORAGE/custom.xml"
+  [ ! -f "$file" ] || [ ! -s "$file" ] && file="/run/assets/custom.xml"
+  [ ! -f "$file" ] || [ ! -s "$file" ] && file="$1"
+  [ ! -f "$file" ] || [ ! -s "$file" ] && file="/run/assets/$DETECTED.xml"
+  [ ! -f "$file" ] || [ ! -s "$file" ] && return 1
+
+  XML="$file"
+  return 0
+}
+
 detectImage() {
 
   local dir="$1"
   local version="$2"
-  local desc msg
+  local desc msg find language
 
   XML=""
 
@@ -734,7 +511,7 @@ detectImage() {
 
   if [ -n "$DETECTED" ]; then
 
-    [[ "${DETECTED,,}" == "winxp"* ]] && return 0
+    skipVersion "${DETECTED,,}" && return 0
 
     if ! setXML "" && [[ "$MANUAL" != [Yy1]* ]]; then
       MANUAL="Y"
@@ -747,30 +524,27 @@ detectImage() {
 
   info "Detecting version from ISO image..."
 
-  if [ -f "$dir/WIN51" ] || [ -f "$dir/SETUPXP.HTM" ]; then
-    [ -d "$dir/AMD64" ] && DETECTED="winxpx64" || DETECTED="winxpx86"
-    desc=$(printEdition "$DETECTED" "Windows XP")
+  if detectLegacy "$dir"; then
+    desc=$(printEdition "$DETECTED" "$DETECTED")
     info "Detected: $desc"
     return 0
   fi
 
-  local src loc info
+  local src wim info
   src=$(find "$dir" -maxdepth 1 -type d -iname sources | head -n 1)
 
   if [ ! -d "$src" ]; then
-    [[ "${PLATFORM,,}" == "x64" ]] && BOOT_MODE="windows_legacy"
     warn "failed to locate 'sources' folder in ISO image, $FB" && return 1
   fi
 
-  loc=$(find "$src" -maxdepth 1 -type f -iname install.wim | head -n 1)
-  [ ! -f "$loc" ] && loc=$(find "$src" -maxdepth 1 -type f -iname install.esd | head -n 1)
+  wim=$(find "$src" -maxdepth 1 -type f -iname install.wim | head -n 1)
+  [ ! -f "$wim" ] && wim=$(find "$src" -maxdepth 1 -type f -iname install.esd | head -n 1)
 
-  if [ ! -f "$loc" ]; then
-    [[ "${PLATFORM,,}" == "x64" ]] && BOOT_MODE="windows_legacy"
+  if [ ! -f "$wim" ]; then
     warn "failed to locate 'install.wim' or 'install.esd' in ISO image, $FB" && return 1
   fi
 
-  info=$(wimlib-imagex info -xml "$loc" | tr -d '\000')
+  info=$(wimlib-imagex info -xml "$wim" | tr -d '\000')
   ! checkPlatform "$info" && exit 67
 
   DETECTED=$(detectVersion "$info")
@@ -787,6 +561,12 @@ detectImage() {
   fi
 
   desc=$(printEdition "$DETECTED" "$DETECTED")
+  detectLanguage "$info"
+
+  if [[ "${LANGUAGE,,}" != "en" ]] && [[ "${LANGUAGE,,}" != "en-"* ]]; then
+    language=$(getLanguage "$LANGUAGE" "desc")
+    desc=+" ($language)"
+  fi
 
   info "Detected: $desc"
   setXML "" && return 0
@@ -808,23 +588,12 @@ prepareImage() {
 
   local iso="$1"
   local dir="$2"
-  local missing
+  local desc missing
 
-  case "${DETECTED,,}" in
-    "winxp"* | "winvistax86"* |  "win7x86"* )
-      MACHINE="pc-q35-2.10"
-      ;;
-  esac
+  desc=$(printVersion "$DETECTED" "$DETECTED")
 
-  case "${DETECTED,,}" in
-    "winxp"* )
-      BOOT_MODE="windows_legacy"
-      prepareXP "$iso" "$dir" && return 0
-      error "Failed to prepare Windows XP ISO!" && return 1
-      ;;
-    "winvista"* | "win7"* | "win2008"* )
-      BOOT_MODE="windows_legacy" ;;
-  esac
+  ! setMachine "$DETECTED" "$iso" "$dir" "$desc" && return 1
+  skipVersion "$DETECTED" && return 0
 
   if [[ "${BOOT_MODE,,}" != "windows_legacy" ]]; then
 
@@ -832,28 +601,198 @@ prepareImage() {
 
     missing=$(basename "$dir/$EFISYS")
     [ ! -f "$dir/$ETFS" ] && missing=$(basename "$dir/$ETFS")
-    warn "failed to locate file '${missing,,}' in ISO image!"
 
-    [[ "${PLATFORM,,}" == "arm64" ]] && return 1
-    BOOT_MODE="windows_legacy"
+    error "Failed to locate file \"${missing,,}\" in ISO image!"
+    return 1
   fi
 
-  prepareLegacy "$iso" "$dir" && return 0
+  prepareLegacy "$iso" "$dir" "$desc" && return 0
 
-  error "Failed to extract boot image from ISO!"
+  error "Failed to extract boot image from ISO image!"
   return 1
+}
+
+updateXML() {
+
+  local asset="$1"
+  local language="$2"
+  local culture region user admin pass keyboard
+
+  [ -z "$YRES" ] && YRES="720"
+  [ -z "$XRES" ] && XRES="1280"
+  
+  sed -i "s/<VerticalResolution>1080<\/VerticalResolution>/<VerticalResolution>$YRES<\/VerticalResolution>/g" "$asset"
+  sed -i "s/<HorizontalResolution>1920<\/HorizontalResolution>/<HorizontalResolution>$XRES<\/HorizontalResolution>/g" "$asset"
+
+  culture=$(getLanguage "$language" "culture")
+
+  if [ -n "$culture" ] && [[ "${culture,,}" != "en-us" ]]; then
+    sed -i "s/<UILanguage>en-US<\/UILanguage>/<UILanguage>$culture<\/UILanguage>/g" "$asset"
+  fi
+
+  region="$REGION"
+  [ -z "$region" ] && region="$culture"
+
+  if [ -n "$region" ] && [[ "${region,,}" != "en-us" ]]; then
+    sed -i "s/<UserLocale>en-US<\/UserLocale>/<UserLocale>$region<\/UserLocale>/g" "$asset"
+    sed -i "s/<SystemLocale>en-US<\/SystemLocale>/<SystemLocale>$region<\/SystemLocale>/g" "$asset"
+  fi
+
+  keyboard="$KEYBOARD"
+  [ -z "$keyboard" ] && keyboard="$culture"
+
+  if [ -n "$keyboard" ] && [[ "${keyboard,,}" != "en-us" ]]; then
+    sed -i "s/<InputLocale>en-US<\/InputLocale>/<InputLocale>$keyboard<\/InputLocale>/g" "$asset"
+    sed -i "s/<InputLocale>0409:00000409<\/InputLocale>/<InputLocale>$keyboard<\/InputLocale>/g" "$asset"
+  fi
+
+  user=$(echo "$USERNAME" | sed 's/[^[:alnum:]@!._-]//g')
+
+  if [ -n "$user" ]; then
+    sed -i "s/<Name>Docker<\/Name>/<Name>$user<\/Name>/g" "$asset"
+    sed -i "s/where name=\"Docker\"/where name=\"$user\"/g" "$asset"
+    sed -i "s/<FullName>Docker<\/FullName>/<FullName>$user<\/FullName>/g" "$asset"
+    sed -i "s/<Username>Docker<\/Username>/<Username>$user<\/Username>/g" "$asset"
+  fi
+
+  if [ -n "$PASSWORD" ]; then
+    pass=$(printf '%s' "${PASSWORD}Password" | iconv -f utf-8 -t utf-16le | base64 -w 0)
+    admin=$(printf '%s' "${PASSWORD}AdministratorPassword" | iconv -f utf-8 -t utf-16le | base64 -w 0)
+    sed -i "s/<Value>password<\/Value>/<Value>$admin<\/Value>/g" "$asset"
+    sed -i "s/<PlainText>true<\/PlainText>/<PlainText>false<\/PlainText>/g" "$asset"
+    sed -z "s/<Password>...........<Value \/>/<Password>\n          <Value>$pass<\/Value>/g" -i "$asset"
+    sed -z "s/<Password>...............<Value \/>/<Password>\n              <Value>$pass<\/Value>/g" -i "$asset"
+    sed -z "s/<AdministratorPassword>...........<Value \/>/<AdministratorPassword>\n          <Value>$admin<\/Value>/g" -i "$asset"
+    sed -z "s/<AdministratorPassword>...............<Value \/>/<AdministratorPassword>\n              <Value>$admin<\/Value>/g" -i "$asset"
+  fi
+
+  return 0
+}
+
+addDriver() {
+
+  local id="$1"
+  local path="$2"
+  local target="$3"
+  local driver="$4"
+  local folder=""
+
+  case "${id,,}" in
+    "win7x86"* ) folder="w7/x86" ;;
+    "win7x64"* ) folder="w7/amd64" ;;
+    "win81x64"* ) folder="w8.1/amd64" ;;
+    "win10x64"* ) folder="w10/amd64" ;;
+    "win11x64"* ) folder="w11/amd64" ;;
+    "win2025"* ) folder="w11/amd64" ;;
+    "win2022"* ) folder="2k22/amd64" ;;
+    "win2019"* ) folder="2k19/amd64" ;;
+    "win2016"* ) folder="2k16/amd64" ;;
+    "win2012"* ) folder="2k12R2/amd64" ;;
+    "win2008"* ) folder="2k8R2/amd64" ;;
+    "win10arm64"* ) folder="w10/ARM64" ;;
+    "win11arm64"* ) folder="w11/ARM64" ;;
+    "winvistax86"* ) folder="2k8/x86" ;;
+    "winvistax64"* ) folder="2k8/amd64" ;;
+  esac
+
+  if [ -z "$folder" ]; then
+    warn "no \"$driver\" driver found for \"$DETECTED\" !" && return 0
+  fi
+
+  [ ! -d "$path/$driver/$folder" ] && return 0
+
+  if [[ "${id,,}" == "winvista"* ]]; then
+    [[ "${driver,,}" == "viorng" ]] && return 0
+  fi
+
+  local dest="$path/$target/$driver"
+  mv "$path/$driver/$folder" "$dest"
+
+  return 0
+}
+
+addDrivers() {
+
+  local file="$1"
+  local index="$2"
+  local version="$3"
+
+  local msg="Adding drivers to image..."
+  info "$msg" && html "$msg"
+
+  local drivers="$TMP/drivers"
+  mkdir -p "$drivers"
+
+  if ! tar -xf /drivers.txz -C "$drivers" --warning=no-timestamp; then
+    error "Failed to extract driver!" && return 1
+  fi
+
+  local target="\$WinPEDriver\$"
+  local dest="$drivers/$target"
+  mkdir -p "$dest"
+
+  wimlib-imagex update "$file" "$index" --command "delete --force --recursive /$target" >/dev/null || true
+
+  addDriver "$version" "$drivers" "$target" "qxl"
+  addDriver "$version" "$drivers" "$target" "viofs"
+  addDriver "$version" "$drivers" "$target" "sriov"
+  addDriver "$version" "$drivers" "$target" "smbus"
+  addDriver "$version" "$drivers" "$target" "qxldod"
+  addDriver "$version" "$drivers" "$target" "viorng"
+  addDriver "$version" "$drivers" "$target" "viostor"
+  addDriver "$version" "$drivers" "$target" "NetKVM"
+  addDriver "$version" "$drivers" "$target" "Balloon"
+  addDriver "$version" "$drivers" "$target" "vioscsi"
+  addDriver "$version" "$drivers" "$target" "pvpanic"
+  addDriver "$version" "$drivers" "$target" "vioinput"
+  addDriver "$version" "$drivers" "$target" "viogpudo"
+  addDriver "$version" "$drivers" "$target" "vioserial"
+  addDriver "$version" "$drivers" "$target" "qemupciserial"
+
+  if ! wimlib-imagex update "$file" "$index" --command "add $dest /$target" >/dev/null; then
+    return 1
+  fi
+
+  rm -rf "$drivers"
+  return 0
+}
+
+addFolder() {
+
+  local src="$1"
+  local folder="/oem"
+
+  [ ! -d "$folder" ] && folder="/OEM"
+  [ ! -d "$folder" ] && folder="$STORAGE/oem"
+  [ ! -d "$folder" ] && folder="$STORAGE/OEM"
+  [ ! -d "$folder" ] && return 0
+
+  local msg="Adding OEM folder to image..."
+  info "$msg" && html "$msg"
+
+  local dest="$src/\$OEM\$/\$1/"
+  mkdir -p "$dest"
+
+  ! cp -r "$folder" "$dest" && return 1
+
+  local file
+  file=$(find "$dest" -maxdepth 1 -type f -iname install.bat | head -n 1)
+  [ -f "$file" ] && unix2dos -q "$file"
+
+  return 0
 }
 
 updateImage() {
 
   local dir="$1"
   local asset="$2"
+  local language="$3"
   local file="autounattend.xml"
-  local org="${file/.xml/.org}"
-  local dat="${file/.xml/.dat}"
-  local desc path src loc xml index result
+  local org="${file//.xml/.org}"
+  local dat="${file//.xml/.dat}"
+  local desc path src wim xml index result
 
-  [[ "${DETECTED,,}" == "winxp"* ]] && return 0
+  skipVersion "${DETECTED,,}" && return 0
 
   if [ ! -s "$asset" ] || [ ! -f "$asset" ]; then
     asset=""
@@ -866,29 +805,35 @@ updateImage() {
   src=$(find "$dir" -maxdepth 1 -type d -iname sources | head -n 1)
 
   if [ ! -d "$src" ]; then
-    [[ "${PLATFORM,,}" == "x64" ]] && BOOT_MODE="windows_legacy"
-    warn "failed to locate 'sources' folder in ISO image, $FB" && return 1
+    error "failed to locate 'sources' folder in ISO image, $FB" && return 1
   fi
 
-  loc=$(find "$src" -maxdepth 1 -type f -iname boot.wim | head -n 1)
-  [ ! -f "$loc" ] && loc=$(find "$src" -maxdepth 1 -type f -iname boot.esd | head -n 1)
+  wim=$(find "$src" -maxdepth 1 -type f -iname boot.wim | head -n 1)
+  [ ! -f "$wim" ] && wim=$(find "$src" -maxdepth 1 -type f -iname boot.esd | head -n 1)
 
-  if [ ! -f "$loc" ]; then
-    [[ "${PLATFORM,,}" == "x64" ]] && BOOT_MODE="windows_legacy"
-    warn "failed to locate 'boot.wim' or 'boot.esd' in ISO image, $FB" && return 1
+  if [ ! -f "$wim" ]; then
+    error "failed to locate 'boot.wim' or 'boot.esd' in ISO image, $FB" && return 1
   fi
 
   index="1"
-  result=$(wimlib-imagex info -xml "$loc" | tr -d '\000')
+  result=$(wimlib-imagex info -xml "$wim" | tr -d '\000')
 
   if [[ "${result^^}" == *"<IMAGE INDEX=\"2\">"* ]]; then
     index="2"
   fi
 
-  if wimlib-imagex extract "$loc" "$index" "/$file" "--dest-dir=$TMP" >/dev/null 2>&1; then
-    if ! wimlib-imagex extract "$loc" "$index" "/$dat" "--dest-dir=$TMP" >/dev/null 2>&1; then
-      if ! wimlib-imagex extract "$loc" "$index" "/$org" "--dest-dir=$TMP" >/dev/null 2>&1; then
-        if ! wimlib-imagex update "$loc" "$index" --command "rename /$file /$org" > /dev/null; then
+  if ! addDrivers "$wim" "$index" "$DETECTED"; then
+    error "Failed to add drivers to image!" && return 1
+  fi
+
+  if ! addFolder "$src"; then
+    error "Failed to add OEM folder to image!" && return 1
+  fi
+
+  if wimlib-imagex extract "$wim" "$index" "/$file" "--dest-dir=$TMP" >/dev/null 2>&1; then
+    if ! wimlib-imagex extract "$wim" "$index" "/$dat" "--dest-dir=$TMP" >/dev/null 2>&1; then
+      if ! wimlib-imagex extract "$wim" "$index" "/$org" "--dest-dir=$TMP" >/dev/null 2>&1; then
+        if ! wimlib-imagex update "$wim" "$index" --command "rename /$file /$org" > /dev/null; then
           warn "failed to backup original answer file ($file)."
         fi
       fi
@@ -903,25 +848,32 @@ updateImage() {
     xml=$(basename "$asset")
     info "Adding $xml for automatic installation..."
 
-    if ! wimlib-imagex update "$loc" "$index" --command "add $asset /$file" > /dev/null; then
+    local answer="$TMP/$xml"
+    cp "$asset" "$answer"
+    updateXML "$answer" "$language"
+
+    if ! wimlib-imagex update "$wim" "$index" --command "add $answer /$file" > /dev/null; then
       MANUAL="Y"
       warn "failed to add answer file ($xml) to ISO image, $FB"
     else
-      wimlib-imagex update "$loc" "$index" --command "add $asset /$dat" > /dev/null || true
+      wimlib-imagex update "$wim" "$index" --command "add $answer /$dat" > /dev/null || true
     fi
+
+    rm -f "$answer"
 
   fi
 
   if [[ "$MANUAL" == [Yy1]* ]]; then
 
-    wimlib-imagex update "$loc" "$index" --command "delete --force /$file" > /dev/null || true
+    wimlib-imagex update "$wim" "$index" --command "delete --force /$file" > /dev/null || true
 
-    if wimlib-imagex extract "$loc" "$index" "/$org" "--dest-dir=$TMP" >/dev/null 2>&1; then
-      if ! wimlib-imagex update "$loc" "$index" --command "add $TMP/$org /$file" > /dev/null; then
+    if wimlib-imagex extract "$wim" "$index" "/$org" "--dest-dir=$TMP" >/dev/null 2>&1; then
+      if ! wimlib-imagex update "$wim" "$index" --command "add $TMP/$org /$file" > /dev/null; then
         warn "failed to restore original answer file ($org)."
       fi
-      rm -f "$TMP/$org"
     fi
+
+    rm -f "$TMP/$org"
 
   fi
 
@@ -940,35 +892,13 @@ updateImage() {
   return 0
 }
 
-copyOEM() {
+removeImage() {
 
-  local dir="$1"
-  local folder="/oem"
-  local src dest file
+  local iso="$1"
 
-  [ ! -d "$folder" ] && folder="/OEM"
-  [ ! -d "$folder" ] && folder="$STORAGE/oem"
-  [ ! -d "$folder" ] && folder="$STORAGE/OEM"
-  [ ! -d "$folder" ] && return 0
-
-  local msg="Copying OEM folder to image..."
-  info "$msg" && html "$msg"
-
-  src=$(find "$dir" -maxdepth 1 -type d -iname sources | head -n 1)
-
-  if [ ! -d "$src" ]; then
-    error "failed to locate 'sources' folder in ISO image!" && return 1
-  fi
-
-  dest="$src/\$OEM\$/\$1/"
-  mkdir -p "$dest"
-
-  if ! cp -r "$folder" "$dest"; then
-    error "Failed to copy OEM folder!" && return 1
-  fi
-
-  file=$(find "$dest" -maxdepth 1 -type f -iname install.bat | head -n 1)
-  [ -f "$file" ] && unix2dos -q "$file"
+  [ ! -f "$iso" ] && return 0
+  [ -n "$CUSTOM" ] && return 0
+  ! rm -f "$iso" 2> /dev/null && warn "failed to remove $iso !"
 
   return 0
 }
@@ -976,7 +906,7 @@ copyOEM() {
 buildImage() {
 
   local dir="$1"
-  local failed="N"
+  local failed=""
   local cat="BOOT.CAT"
   local log="/run/shm/iso.log"
   local base size size_gb space space_gb desc
@@ -994,6 +924,12 @@ buildImage() {
   local msg="Building $desc image..."
   info "$msg" && html "$msg"
 
+  [ -z "$LABEL" ] && LABEL="Windows"
+
+  if [ ! -f "$dir/$ETFS" ]; then
+    error "Failed to locate file \"$ETFS\" in ISO image!" && return 1
+  fi
+
   size=$(du -h -b --max-depth=0 "$dir" | cut -f1)
   size_gb=$(( (size + 1073741823)/1073741824 ))
   space=$(df --output=avail -B 1 "$TMP" | tail -n 1)
@@ -1003,35 +939,27 @@ buildImage() {
     error "Not enough free space in $STORAGE, have $space_gb GB available but need at least $size_gb GB." && return 1
   fi
 
-  [ -z "$LABEL" ] && LABEL="Windows"
-
   if [[ "${BOOT_MODE,,}" != "windows_legacy" ]]; then
 
-    if ! genisoimage -o "$out" -b "$ETFS" -no-emul-boot -c "$cat" -iso-level 4 -J -l -D -N -joliet-long -relaxed-filenames -V "${LABEL::30}" \
-                     -udf -boot-info-table -eltorito-alt-boot -eltorito-boot "$EFISYS" -no-emul-boot -allow-limited-size -quiet "$dir" 2> "$log"; then
-      failed="Y"
-    fi
+    ! genisoimage -o "$out" -b "$ETFS" -no-emul-boot -c "$cat" -iso-level 4 -J -l -D -N -joliet-long -relaxed-filenames -V "${LABEL::30}" \
+                  -udf -boot-info-table -eltorito-alt-boot -eltorito-boot "$EFISYS" -no-emul-boot -allow-limited-size -quiet "$dir" 2> "$log" && failed="y"
 
   else
 
-    if [[ "${DETECTED,,}" != "winxp"* ]]; then
+    case "${DETECTED,,}" in
+      "win2k"* | "winxp"* | "win2003"* )
+        ! genisoimage -o "$out" -b "$ETFS" -no-emul-boot -boot-load-seg 1984 -boot-load-size 4 -c "$cat" -iso-level 2 -J -l -D -N -joliet-long \
+                      -relaxed-filenames -V "${LABEL::30}" -quiet "$dir" 2> "$log" && failed="y" ;;
+      "win9"* )
+        ! genisoimage -o "$out" -b "$ETFS" -J -r -V "${LABEL::30}" -quiet "$dir" 2> "$log" && failed="y" ;;
+      * )
+        ! genisoimage -o "$out" -b "$ETFS" -no-emul-boot -c "$cat" -iso-level 2 -J -l -D -N -joliet-long -relaxed-filenames -V "${LABEL::30}" \
+                      -udf -allow-limited-size -quiet "$dir" 2> "$log" && failed="y" ;;
+    esac
 
-      if ! genisoimage -o "$out" -b "$ETFS" -no-emul-boot -c "$cat" -iso-level 2 -J -l -D -N -joliet-long -relaxed-filenames -V "${LABEL::30}" \
-                       -udf -allow-limited-size -quiet "$dir" 2> "$log"; then
-        failed="Y"
-      fi
-
-    else
-
-      if ! genisoimage -o "$out" -b "$ETFS" -no-emul-boot -boot-load-seg 1984 -boot-load-size 4 -c "$cat" -iso-level 2 -J -l -D -N -joliet-long \
-                       -relaxed-filenames -V "${LABEL::30}" -quiet "$dir" 2> "$log"; then
-        failed="Y"
-      fi
-
-    fi
   fi
 
-  if [[ "$failed" != "N" ]]; then
+  if [ -n "$failed" ]; then
     [ -s "$log" ] && echo "$(<"$log")"
     error "Failed to build image!" && return 1
   fi
@@ -1050,12 +978,15 @@ bootWindows() {
 
   rm -rf "$TMP"
 
-  if [ ! -f "$BOOT" ] || [ ! -s "$BOOT" ]; then
-    BOOT="/custom.iso"
-    [ ! -f "$BOOT" ] && BOOT="${STORAGE}$BOOT"
+  if [ -s "$STORAGE/windows.vga" ] && [ -f "$STORAGE/windows.vga" ]; then
+    [ -z "${VGA:-}" ] && VGA=$(<"$STORAGE/windows.vga")
+  else
+    [ -z "${VGA:-}" ] && [[ "${PLATFORM,,}" == "arm64" ]] && VGA="virtio-gpu"
   fi
 
-  [[ "${PLATFORM,,}" == "arm64" ]] && VGA="virtio-gpu"
+  if [ -s "$STORAGE/windows.type" ] && [ -f "$STORAGE/windows.type" ]; then
+    [ -z "${DISK_TYPE:-}" ] && DISK_TYPE=$(<"$STORAGE/windows.type")
+  fi
 
   if [ -s "$STORAGE/windows.mode" ] && [ -f "$STORAGE/windows.mode" ]; then
     BOOT_MODE=$(<"$STORAGE/windows.mode")
@@ -1105,6 +1036,7 @@ bootWindows() {
 ######################################
 
 ! parseVersion && exit 58
+! parseLanguage && exit 56
 ! detectCustom && exit 59
 
 if ! startInstall; then
@@ -1113,7 +1045,7 @@ if ! startInstall; then
 fi
 
 if [ ! -s "$ISO" ] || [ ! -f "$ISO" ]; then
-  if ! downloadImage "$ISO" "$VERSION"; then
+  if ! downloadImage "$ISO" "$VERSION" "$LANGUAGE"; then
     rm -f "$ISO" 2> /dev/null || true
     exit 61
   fi
@@ -1125,26 +1057,22 @@ if ! extractImage "$ISO" "$DIR" "$VERSION"; then
 fi
 
 if ! detectImage "$DIR" "$VERSION"; then
-  abortInstall "$ISO" && return 0
+  abortInstall "$DIR" "$ISO" && return 0
   exit 60
 fi
 
 if ! prepareImage "$ISO" "$DIR"; then
-  abortInstall "$ISO" && return 0
-  exit 60
+  abortInstall "$DIR" "$ISO" && return 0
+  exit 66
 fi
 
-if ! updateImage "$DIR" "$XML"; then
-  abortInstall "$ISO" && return 0
-  exit 60
-fi
-
-if ! removeDownload "$ISO"; then
-  exit 64
-fi
-
-if ! copyOEM "$DIR"; then
+if ! updateImage "$DIR" "$XML" "$LANGUAGE"; then
+  abortInstall "$DIR" "$ISO" && return 0
   exit 63
+fi
+
+if ! removeImage "$ISO"; then
+  exit 64
 fi
 
 if ! buildImage "$DIR"; then
