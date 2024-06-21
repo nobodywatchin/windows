@@ -7,12 +7,12 @@ ARG DEBIAN_FRONTEND="noninteractive"
 ARG DEBCONF_NONINTERACTIVE_SEEN="true"
 
 # Set the shell with pipefail option
-# SHELL ["/bin/sh", "-o", "pipefail", "-c"]
+SHELL ["/bin/sh", "-o", "pipefail", "-c"]
 
 # Add testing repository for SPICE and looking glass
-RUN printf "%s\n" "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
+RUN echo "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
 
-RUN printf "%s\n" "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
+RUN echo -e "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
 
 RUN set -eu && \
     apt-get update && \
