@@ -6,9 +6,6 @@ ARG DEBCONF_NOWARNINGS="yes"
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG DEBCONF_NONINTERACTIVE_SEEN="true"
 
-# Set the shell with pipefail option
-SHELL ["/bin/sh", "-o", "pipefail", "-c"]
-
 # Add testing repository for SPICE and looking glass
 RUN echo "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
 
