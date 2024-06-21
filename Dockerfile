@@ -40,6 +40,8 @@ RUN echo "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.li
 
 RUN echo -e "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
 
+SHELL ["/bin/sh", "-o", "pipefail", "-c"]
+
 RUN apt-get update && \
 		apt-get --no-install-recommends -y install \
 		qemu-system-modules-spice
