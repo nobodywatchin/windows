@@ -35,6 +35,17 @@ RUN set -eu && \
 RUN git clone https://github.com/zhaodice/qemu-anti-detection.git /opt/qemu-anti-detection && \
     chmod -R 755 /opt/qemu-anti-detection
 
+# Add testing repository for SPICE and looking glass
+RUN echo "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
+
+RUN echo -e "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
+
+RUN apt-get update && \
+		apt-get --no-install-recommends -y install \
+		qemu-system-modules-spice
+
+ENTRYPOINT ["/usr/bin/tini", "-s", "/run/entry.sh"]
+
 COPY --chmod=755 ./src /run/
 COPY --chmod=755 ./assets /run/assets
 
