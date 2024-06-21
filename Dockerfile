@@ -7,7 +7,12 @@ ARG DEBIAN_FRONTEND="noninteractive"
 ARG DEBCONF_NONINTERACTIVE_SEEN="true"
 
 # Set the shell with pipefail option
-SHELL ["/bin/sh", "-o", "pipefail", "-c"]
+# SHELL ["/bin/sh", "-o", "pipefail", "-c"]
+
+# Add testing repository for SPICE and looking glass
+RUN printf "%s\n" "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
+
+RUN printf "%s\n" "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
 
 RUN set -eu && \
     apt-get update && \
@@ -28,6 +33,7 @@ RUN set -eu && \
         ninja-build \
         python3-venv \
         libglib2.0-0t64 \
+        qemu-system-modules-spice \
         flex \
         bison && \
     apt-get clean && \
@@ -37,16 +43,6 @@ RUN set -eu && \
 # Clone and set up the QEMU anti-detection script
 RUN git clone https://github.com/zhaodice/qemu-anti-detection.git /opt/qemu-anti-detection && \
     chmod -R 755 /opt/qemu-anti-detection
-
-# Add testing repository for SPICE and looking glass
-RUN printf "%s\n" "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
-
-RUN printf "%s\n" "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
-
-RUN apt-get update && \
-    apt-get --no-install-recommends -y install \
-    qemu-system-modules-spice && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 COPY --chmod=755 ./src /run/
 COPY --chmod=755 ./assets /run/assets
