@@ -44,8 +44,6 @@ RUN apt-get update && \
 		apt-get --no-install-recommends -y install \
 		qemu-system-modules-spice
 
-ENTRYPOINT ["/usr/bin/tini", "-s", "/run/entry.sh"]
-
 COPY --chmod=755 ./src /run/
 COPY --chmod=755 ./assets /run/assets
 
