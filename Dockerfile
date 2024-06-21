@@ -6,11 +6,6 @@ ARG DEBCONF_NOWARNINGS="yes"
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG DEBCONF_NONINTERACTIVE_SEEN="true"
 
-# Add testing repository for SPICE and looking glass
-RUN echo "deb http://deb.debian.org/debian/ testing main" >> /etc/apt/sources.list.d/sid.list
-
-RUN echo -e "Package: *\nPin: testing n=trixie\nPin-Priority: 350" | tee -a /etc/apt/preferences.d/preferences > /dev/null
-
 RUN set -eu && \
     apt-get update && \
     apt-get --no-install-recommends -y install \
@@ -30,11 +25,10 @@ RUN set -eu && \
         ninja-build \
         python3-venv \
         libglib2.0-0t64 \
-        qemu-system-modules-spice \
         flex \
         bison && \
     apt-get clean && \
-    printf "%s\n" "$VERSION_ARG" > /run/version && \
+    echo "$VERSION_ARG" > /run/version && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Clone and set up the QEMU anti-detection script
