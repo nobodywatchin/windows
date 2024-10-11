@@ -156,10 +156,6 @@ finishInstall() {
     fi
   fi
 
-  if [ -n "${VGA:-}" ] && [[ "${VGA:-}" != "virtio" ]] && [[ "${VGA:-}" != "ramfb" ]]; then
-    echo "$VGA" > "$STORAGE/windows.vga"
-  fi
-
   if [ -n "${DISK_TYPE:-}" ] && [[ "${DISK_TYPE:-}" != "scsi" ]]; then
     echo "$DISK_TYPE" > "$STORAGE/windows.type"
   fi
@@ -620,7 +616,7 @@ updateXML() {
 
   [ -z "$YRES" ] && YRES="720"
   [ -z "$XRES" ] && XRES="1280"
-  
+
   sed -i "s/<VerticalResolution>1080<\/VerticalResolution>/<VerticalResolution>$YRES<\/VerticalResolution>/g" "$asset"
   sed -i "s/<HorizontalResolution>1920<\/HorizontalResolution>/<HorizontalResolution>$XRES<\/HorizontalResolution>/g" "$asset"
 
@@ -683,7 +679,7 @@ addDriver() {
     "win81x64"* ) folder="w8.1/amd64" ;;
     "win10x64"* ) folder="w10/amd64" ;;
     "win11x64"* ) folder="w11/amd64" ;;
-    "win2025"* ) folder="w11/amd64" ;;
+    "win2025"* ) folder="2k25/amd64" ;;
     "win2022"* ) folder="2k22/amd64" ;;
     "win2019"* ) folder="2k19/amd64" ;;
     "win2016"* ) folder="2k16/amd64" ;;
@@ -701,9 +697,11 @@ addDriver() {
 
   [ ! -d "$path/$driver/$folder" ] && return 0
 
-  if [[ "${id,,}" == "winvista"* ]]; then
-    [[ "${driver,,}" == "viorng" ]] && return 0
-  fi
+  case "${id,,}" in
+    "winvista"* )
+      [[ "${driver,,}" == "viorng" ]] && return 0
+      ;;
+  esac
 
   local dest="$path/$target/$driver"
   mv "$path/$driver/$folder" "$dest"
@@ -713,9 +711,10 @@ addDriver() {
 
 addDrivers() {
 
-  local file="$1"
-  local index="$2"
-  local version="$3"
+  local src="$1"
+  local file="$2"
+  local index="$3"
+  local version="$4"
 
   local msg="Adding drivers to image..."
   info "$msg" && html "$msg"
@@ -739,6 +738,7 @@ addDrivers() {
   addDriver "$version" "$drivers" "$target" "smbus"
   addDriver "$version" "$drivers" "$target" "qxldod"
   addDriver "$version" "$drivers" "$target" "viorng"
+  addDriver "$version" "$drivers" "$target" "viomem"  
   addDriver "$version" "$drivers" "$target" "viostor"
   addDriver "$version" "$drivers" "$target" "NetKVM"
   addDriver "$version" "$drivers" "$target" "Balloon"
@@ -748,6 +748,16 @@ addDrivers() {
   addDriver "$version" "$drivers" "$target" "viogpudo"
   addDriver "$version" "$drivers" "$target" "vioserial"
   addDriver "$version" "$drivers" "$target" "qemupciserial"
+
+  case "${version,,}" in
+    "win11x64"* | "win2025"* )
+      # Workaround Virtio GPU driver bug
+      local dst="$src/\$OEM\$/\$\$/Drivers"
+      mkdir -p "$dst"
+      ! cp -a "$dest/." "$dst" && return 1
+      rm -rf "$dest/viogpudo"
+      ;;
+  esac
 
   if ! wimlib-imagex update "$file" "$index" --command "add $dest /$target" >/dev/null; then
     return 1
@@ -770,10 +780,10 @@ addFolder() {
   local msg="Adding OEM folder to image..."
   info "$msg" && html "$msg"
 
-  local dest="$src/\$OEM\$/\$1/"
+  local dest="$src/\$OEM\$/\$1/OEM"
   mkdir -p "$dest"
 
-  ! cp -r "$folder" "$dest" && return 1
+  ! cp -a "$folder/." "$dest" && return 1
 
   local file
   file=$(find "$dest" -maxdepth 1 -type f -iname install.bat | head -n 1)
@@ -822,7 +832,7 @@ updateImage() {
     index="2"
   fi
 
-  if ! addDrivers "$wim" "$index" "$DETECTED"; then
+  if ! addDrivers "$src" "$wim" "$index" "$DETECTED"; then
     error "Failed to add drivers to image!" && return 1
   fi
 
@@ -977,12 +987,6 @@ buildImage() {
 bootWindows() {
 
   rm -rf "$TMP"
-
-  if [ -s "$STORAGE/windows.vga" ] && [ -f "$STORAGE/windows.vga" ]; then
-    [ -z "${VGA:-}" ] && VGA=$(<"$STORAGE/windows.vga")
-  else
-    [ -z "${VGA:-}" ] && [[ "${PLATFORM,,}" == "arm64" ]] && VGA="virtio-gpu"
-  fi
 
   if [ -s "$STORAGE/windows.type" ] && [ -f "$STORAGE/windows.type" ]; then
     [ -z "${DISK_TYPE:-}" ] && DISK_TYPE=$(<"$STORAGE/windows.type")
